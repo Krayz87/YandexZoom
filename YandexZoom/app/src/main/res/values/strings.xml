@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">Yandex Zoom</string>
+    <string name="app_title">Настройка масштабирования</string>
+    <string name="app_description">Настройте параметры масштабирования для целевого приложения. После изменения нажмите кнопку \"Применить\".</string>
+    <string name="display_scale_label">Масштаб окна:</string>
+    <string name="resources_scale_label">Масштаб ресурсов:</string>
+    <string name="display_scale">%d%%</string>
+    <string name="resources_scale">%d%%</string>
+    <string name="apply_button">Применить</string>
+</resources>
