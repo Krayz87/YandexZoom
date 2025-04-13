@@ -99,10 +99,12 @@ public class MainActivity extends AppCompatActivity {
     
     private void updateDisplayScaleText() {
         displayScaleTextView.setText(getString(R.string.display_scale, displayScalePercent));
+        applySettings();
     }
     
     private void updateResourcesScaleText() {
         resourcesScaleTextView.setText(getString(R.string.resources_scale, resourcesScalePercent));
+        applySettings();
     }
     
     private void loadSettings() {
@@ -126,7 +128,7 @@ public class MainActivity extends AppCompatActivity {
     private void applySettings() {
         // Преобразуем проценты в float значения
         float displayScale = displayScalePercent / 100.0f;
-        float resourcesScale = resourcesScalePercent / 100.0f;
+        float resourcesScale = displayScalePercent / 100.0f;
         
         // Сохраняем настройки
         SharedPreferences preferences = getSharedPreferences(SETTINGS_NAME, MODE_PRIVATE);
