@@ -71,7 +71,6 @@ public class HudPresentation extends Presentation {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
         // Создаем корневой ConstraintLayout
         ConstraintLayout constraintLayout = new ConstraintLayout(getContext());
         constraintLayout.setLayoutParams(new ConstraintLayout.LayoutParams(

@@ -44,6 +44,7 @@ public class ZoomHook extends BroadcastReceiver {
 
     MethodHook.Unhook displayUnhook;
     MethodHook.Unhook resourcesUnhook;
+    MethodHook.Unhook mapKitUnhook;
     HudDisplayManager _hudDisplayManager;
     public static ZoomHook Instance()
     {
@@ -120,6 +121,33 @@ public class ZoomHook extends BroadcastReceiver {
                 Log.e(TAG, "Ошибка при установке хука на getDisplayMetrics: " + e.getMessage());
             }
 
+            // Хук для MapKitFactory.initialize
+            try {
+                Class<?> mapKitFactoryClass = Class.forName("com.yandex.mapkit.MapKitFactory");
+                Method initializeMethod = mapKitFactoryClass.getDeclaredMethod("initialize", Context.class);
+                
+                mapKitUnhook = Pine.hook(initializeMethod, new MethodHook() {
+                    @Override
+                    public void beforeCall(Pine.CallFrame callFrame) throws Throwable {
+                        Log.d(TAG, "Перехват MapKitFactory.initialize перед вызовом");
+                        // Если нужно изменить контекст или другие параметры перед вызовом
+                        // callFrame.args[0] = модифицированный контекст;
+                    }
+
+                    @Override
+                    public void afterCall(Pine.CallFrame callFrame) throws Throwable {
+                        Context context = (Context) callFrame.args[0];
+
+                        createView(context);
+
+                        Log.d(TAG, "MapKitFactory.initialize успешно выполнен с контекстом: " + (context != null ? context.getClass().getName() : "null"));
+                    }
+                });
+                Log.d(TAG, "Хук на MapKitFactory.initialize установлен");
+            } catch (Exception e) {
+                Log.e(TAG, "Ошибка при установке хука на MapKitFactory.initialize: " + e.getMessage());
+            }
+
             initialized = true;
             Log.i(TAG, "Системное масштабирование успешно инициализировано");
         } catch (Exception e2) {
@@ -150,8 +178,6 @@ public class ZoomHook extends BroadcastReceiver {
                     // Инициализируем настройки локали
                     initSetting();
 
-                    createView();
-
                     Log.d(TAG, "Контекст получен и настройки инициализированы");
                 }
             });
@@ -171,9 +197,9 @@ public class ZoomHook extends BroadcastReceiver {
         registerReceiver();
     }
 
-    private void createView()
+    private void createView(Context context)
     {
-        _hudDisplayManager = new HudDisplayManager(appContext);
+        _hudDisplayManager = new HudDisplayManager(context);
         _hudDisplayManager.showOnHudDisplay();
     }
 
