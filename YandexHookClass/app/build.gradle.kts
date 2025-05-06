@@ -41,4 +41,5 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
+    implementation("com.yandex.android:maps.mobile:4.15.0-navikit")
 }

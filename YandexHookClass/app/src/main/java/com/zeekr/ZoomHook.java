@@ -44,7 +44,7 @@ public class ZoomHook extends BroadcastReceiver {
 
     MethodHook.Unhook displayUnhook;
     MethodHook.Unhook resourcesUnhook;
-
+    HudDisplayManager _hudDisplayManager;
     public static ZoomHook Instance()
     {
         if(_zoom == null)
@@ -150,6 +150,8 @@ public class ZoomHook extends BroadcastReceiver {
                     // Инициализируем настройки локали
                     initSetting();
 
+                    createView();
+
                     Log.d(TAG, "Контекст получен и настройки инициализированы");
                 }
             });
@@ -167,6 +169,12 @@ public class ZoomHook extends BroadcastReceiver {
     {
         LoadSettings();
         registerReceiver();
+    }
+
+    private void createView()
+    {
+        _hudDisplayManager = new HudDisplayManager(appContext);
+        _hudDisplayManager.showOnHudDisplay();
     }
 
     @Override
