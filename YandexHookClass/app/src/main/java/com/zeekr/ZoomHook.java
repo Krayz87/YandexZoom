@@ -46,6 +46,8 @@ public class ZoomHook extends BroadcastReceiver {
     MethodHook.Unhook resourcesUnhook;
     MethodHook.Unhook mapKitUnhook;
     HudDisplayManager _hudDisplayManager;
+    private Boolean showOnHud = false;
+
     public static ZoomHook Instance()
     {
         if(_zoom == null)
@@ -121,31 +123,30 @@ public class ZoomHook extends BroadcastReceiver {
                 Log.e(TAG, "Ошибка при установке хука на getDisplayMetrics: " + e.getMessage());
             }
 
-            // Хук для MapKitFactory.initialize
+            // Хук для NavigationBinding.startGuidance
             try {
-                Class<?> mapKitFactoryClass = Class.forName("com.yandex.mapkit.MapKitFactory");
-                Method initializeMethod = mapKitFactoryClass.getDeclaredMethod("initialize", Context.class);
+                Class<?> navigationBindingClass = Class.forName("com.yandex.mapkit.navigation.automotive.internal.NavigationBinding");
+                Method initializeMethod = navigationBindingClass.getDeclaredMethod("startGuidance", Context.class);
                 
                 mapKitUnhook = Pine.hook(initializeMethod, new MethodHook() {
                     @Override
                     public void beforeCall(Pine.CallFrame callFrame) throws Throwable {
-                        Log.d(TAG, "Перехват MapKitFactory.initialize перед вызовом");
+                        Log.d(TAG, "Перехват NavigationBinding.startGuidance перед вызовом");
                         // Если нужно изменить контекст или другие параметры перед вызовом
                         // callFrame.args[0] = модифицированный контекст;
                     }
 
                     @Override
                     public void afterCall(Pine.CallFrame callFrame) throws Throwable {
-                        Context context = (Context) callFrame.args[0];
 
-                        createView(context);
+                        createView(appContext);
 
-                        Log.d(TAG, "MapKitFactory.initialize успешно выполнен с контекстом: " + (context != null ? context.getClass().getName() : "null"));
+                        Log.d(TAG, "NavigationBinding.startGuidance успешно выполнен");
                     }
                 });
-                Log.d(TAG, "Хук на MapKitFactory.initialize установлен");
+                Log.d(TAG, "Хук на NavigationBinding.startGuidance установлен");
             } catch (Exception e) {
-                Log.e(TAG, "Ошибка при установке хука на MapKitFactory.initialize: " + e.getMessage());
+                Log.e(TAG, "Ошибка при установке хука на NavigationBinding.startGuidance: " + e.getMessage());
             }
 
             initialized = true;
@@ -199,7 +200,31 @@ public class ZoomHook extends BroadcastReceiver {
 
     private void createView(Context context)
     {
-        _hudDisplayManager = new HudDisplayManager(context);
+        if(_hudDisplayManager != null)
+        {
+            return;
+        }
+
+        Context appContext = null;
+        try {
+            // Получаем все запущенные приложения через AppGlobals
+            Class<?> activityThreadClass = Class.forName("android.app.ActivityThread");
+            Object currentApplication = activityThreadClass.getMethod("currentApplication").invoke(null);
+            
+            if (currentApplication != null) {
+                // Проверяем, является ли текущее приложение экземпляром VanillaMapsApplication
+                Class<?> vanillaMapsAppClass = Class.forName("ru.yandex.yandexmaps.app.VanillaMapsApplication");
+                if (vanillaMapsAppClass.isInstance(currentApplication)) {
+                    appContext = (Context) currentApplication;
+                    Log.d(TAG, "Получен контекст из VanillaMapsApplication");
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Ошибка при получении контекста из VanillaMapsApplication: " + e.getMessage());
+        }
+
+        Context finalContext = (appContext != null) ? appContext : context;
+        _hudDisplayManager = new HudDisplayManager(finalContext);
         _hudDisplayManager.showOnHudDisplay();
     }
 
