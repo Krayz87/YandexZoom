@@ -19,7 +19,6 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
 
-import androidx.constraintlayout.widget.ConstraintSet;
 import androidx.core.content.ContextCompat;
 
 import com.yandex.mapkit.MapKit;
@@ -29,8 +28,6 @@ import com.yandex.mapkit.logo.Logo;
 import com.yandex.mapkit.logo.Padding;
 import com.yandex.mapkit.mapview.MapView;
 import com.yandex.mapkit.user_location.UserLocationLayer;
-
-import androidx.constraintlayout.widget.ConstraintLayout;
 
 public class HudPresentation extends Presentation {
 
@@ -71,85 +68,40 @@ public class HudPresentation extends Presentation {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        // Создаем корневой ConstraintLayout
-        ConstraintLayout constraintLayout = new ConstraintLayout(getContext());
-        constraintLayout.setLayoutParams(new ConstraintLayout.LayoutParams(
-                ConstraintLayout.LayoutParams.MATCH_PARENT,
-                ConstraintLayout.LayoutParams.MATCH_PARENT));
-        constraintLayout.setBackgroundColor(0x00000000); // Прозрачный фон (#00000000)
+        // Создаем корневой FrameLayout
+        FrameLayout frameLayout = new FrameLayout(getContext());
+        frameLayout.setLayoutParams(new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT));
+        frameLayout.setBackgroundColor(0x00000000); // Прозрачный фон (#00000000)
 
         // Создаем MapView
         mapView = new MapView(getContext());
-        mapView.setId(View.generateViewId()); // Генерация уникального ID для MapView
 
-        // Создаем параметры для MapView
-        ConstraintLayout.LayoutParams mapViewParams = new ConstraintLayout.LayoutParams(
+        // Создаем параметры для MapView с отступами
+        FrameLayout.LayoutParams mapViewParams = new FrameLayout.LayoutParams(
                 dpToPx(200), // 200dp в пикселях
                 dpToPx(250)  // 250dp в пикселях
         );
+        
+        // Устанавливаем отступы для позиционирования MapView
+        mapViewParams.leftMargin = dpToPx(550); // отступ 550dp от левого края
+        mapViewParams.topMargin = dpToPx(220);  // отступ 220dp от верхнего края
+        mapViewParams.gravity = Gravity.TOP | Gravity.START;
 
         // Устанавливаем параметры для MapView
         mapView.setLayoutParams(mapViewParams);
 
-        // Добавляем MapView в ConstraintLayout
-        constraintLayout.addView(mapView);
-
-        // Настраиваем ограничения с использованием ConstraintSet
-        ConstraintSet constraintSet = new ConstraintSet();
-        constraintSet.clone(constraintLayout);
-
-        // Устанавливаем ограничения для MapView
-        constraintSet.connect(
-                mapView.getId(),
-                ConstraintSet.START,
-                ConstraintSet.PARENT_ID,
-                ConstraintSet.START,
-                dpToPx(550) // отступ 550dp от левого края
-        );
-
-        constraintSet.connect(
-                mapView.getId(),
-                ConstraintSet.TOP,
-                ConstraintSet.PARENT_ID,
-                ConstraintSet.TOP,
-                dpToPx(220) // отступ 220dp от верхнего края
-        );
-
-        // Применяем ограничения
-        constraintSet.applyTo(constraintLayout);
+        // Добавляем MapView в FrameLayout
+        frameLayout.addView(mapView);
 
         // Устанавливаем созданный View как содержимое Presentation
-        setContentView(constraintLayout);
-
-        //setContentView(R.layout.map_view);
-
-        //mapView = (MapView) findViewById(R.id.mapview);
+        setContentView(frameLayout);
 
         DisplayMetrics displayMetrics = new DisplayMetrics();
         getDisplay().getRealMetrics(displayMetrics);
         this.heightPixels = displayMetrics.heightPixels;
         this.widthPixels = displayMetrics.widthPixels;
-
-//        FrameLayout.LayoutParams layoutParamsMap = (FrameLayout.LayoutParams) mapView.getLayoutParams();
-//
-//        // Получаем настройки из SettingsManager
-//        int width = settingsManager.getDisplayWidth();
-//        int height = settingsManager.getDisplayHeight();
-//        int leftMargin = settingsManager.getLeftMargin();
-//        int topMargin = settingsManager.getTopMargin();
-//
-//        // Устанавливаем ширину и высоту из настроек (0 означает использование всего экрана)
-//        ((ViewGroup.MarginLayoutParams) layoutParamsMap).width = 300;//(width == 0) ? widthPixels : width;
-//        ((ViewGroup.MarginLayoutParams) layoutParamsMap).height = 300;//(height == 0) ? heightPixels : height;
-//        ((ViewGroup.MarginLayoutParams) layoutParamsMap).leftMargin = leftMargin;
-//        ((ViewGroup.MarginLayoutParams) layoutParamsMap).topMargin = topMargin;
-//
-//        Log.d(TAG, String.format("Применены настройки отображения: ширина=%d, высота=%d, левый отступ=%d, верхний отступ=%d",
-//                ((ViewGroup.MarginLayoutParams) layoutParamsMap).width,
-//                ((ViewGroup.MarginLayoutParams) layoutParamsMap).height,
-//                leftMargin, topMargin));
-//
-//        mapView.setLayoutParams(layoutParamsMap);
 
         Window window = getWindow();
         if (window == null) {
