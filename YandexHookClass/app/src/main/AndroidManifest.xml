@@ -12,7 +12,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Yandexhookclass"
         tools:targetApi="31"
-        android:appComponentFactory="com.zeekr.ZeekrComponentFactory"
+        android:appComponentFactory="egel.app.ZeekrComponentFactory"
         tools:replace="android:appComponentFactory">
         <activity
             android:name=".MainActivity"

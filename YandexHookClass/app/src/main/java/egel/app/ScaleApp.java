@@ -30,11 +30,17 @@ public class ScaleApp extends BroadcastReceiver {
     private static String _rScaleName = "resourcesScale";
     private static String _packageNameParam = "packageName";
     
-//    // Константы для принудительной русской локали
-//    private static String _forceRussianLanguage = "ru";
-//    private static String _forceRussianCountry = "RU";
+    // Константы для принудительной русской локали
+    private static String _forceRussianLanguage = "ru";
+    private static String _forceRussianCountry = "RU";
 
+    // Переменные для контроля частоты логирования (избежание спама)
+    private static long lastResourcesConfigLogTime = 0;
+    private static long lastLocaleListLogTime = 0;
+    private static long lastConfigurationLocalesLogTime = 0;
+    private static final long LOG_INTERVAL_MS = 2000; // Логировать не чаще раза в 2 секунды
 
+    // Флаги для инициализации и состояния
     private boolean initialized;
 
     private boolean registeredReceiver;
@@ -45,7 +51,8 @@ public class ScaleApp extends BroadcastReceiver {
 
     MethodHook.Unhook displayUnhook;
     MethodHook.Unhook resourcesUnhook;
-    MethodHook.Unhook localeUnhook;
+    MethodHook.Unhook configurationUnhook;
+    MethodHook.Unhook localeListUnhook;
 
     public static ScaleApp Instance()
     {
@@ -126,8 +133,8 @@ public class ScaleApp extends BroadcastReceiver {
                 Log.e(TAG, "Ошибка при установке хука на getDisplayMetrics: " + e.getMessage());
             }
 
-//            // Инициализируем хук для принудительного русского языка
-//            initLocaleHook();
+            // Инициализируем хук для принудительного русского языка
+            initLocaleHook();
             
             initialized = true;
             Log.i(TAG, "Системное масштабирование и локализация успешно инициализированы");
@@ -136,86 +143,126 @@ public class ScaleApp extends BroadcastReceiver {
         }
     }
 
-//    /**
-//     * Инициализирует хук для принудительного русского языка
-//     */
-//    public void initLocaleHook() {
-//        try {
-//            Log.i(TAG, "Инициализация принудительного русского языка...");
-//
-//            // Хук на Locale.getDefault() для принудительного возврата русской локали
-//            localeUnhook = Pine.hook(java.util.Locale.class.getDeclaredMethod("getDefault"), new MethodHook() {
-//                @Override
-//                public void afterCall(Pine.CallFrame callFrame) throws Throwable {
-//                    try {
-//                        // Создаем русскую локаль
-//                        java.util.Locale russianLocale = new java.util.Locale(_forceRussianLanguage, _forceRussianCountry);
-//
-//                        // Заменяем результат на русскую локаль
-//                        callFrame.setResult(russianLocale);
-//
-//                        Log.d(TAG, "Системная локаль принудительно установлена на русскую: " + russianLocale.toString());
-//                    } catch (Throwable th) {
-//                        Log.e(TAG, "Ошибка в хуке Locale.getDefault(): " + th.getMessage());
-//                    }
-//                }
-//            });
-//
-//            Log.d(TAG, "Хук на Locale.getDefault() установлен");
-//
-//            // Дополнительный хук на Resources.getConfiguration() для локали в ресурсах
-//            try {
-//                Pine.hook(android.content.res.Resources.class.getDeclaredMethod("getConfiguration"), new MethodHook() {
-//                    @Override
-//                    public void afterCall(Pine.CallFrame callFrame) throws Throwable {
-//                        try {
-//                            android.content.res.Configuration config = (android.content.res.Configuration) callFrame.getResult();
-//                            if (config != null && config.locale != null) {
-//                                // Проверяем, не русская ли уже локаль
-//                                if (!_forceRussianLanguage.equals(config.locale.getLanguage())) {
-//                                    // Устанавливаем русскую локаль в конфигурации
-//                                    config.locale = new java.util.Locale(_forceRussianLanguage, _forceRussianCountry);
-//                                    Log.d(TAG, "Локаль в конфигурации ресурсов изменена на русскую");
-//                                }
-//                            }
-//                        } catch (Throwable th) {
-//                            Log.d(TAG, "Ошибка в хуке Resources.getConfiguration(): " + th.getMessage());
-//                        }
-//                    }
-//                });
-//
-//                Log.d(TAG, "Хук на Resources.getConfiguration() установлен");
-//            } catch (Exception e) {
-//                Log.e(TAG, "Ошибка при установке хука на Resources.getConfiguration(): " + e.getMessage());
-//            }
-//
-//            Log.i(TAG, "Принудительный русский язык успешно инициализирован");
-//        } catch (Exception e) {
-//            Log.e(TAG, "Ошибка при инициализации хука языка: " + e.getMessage());
-//        }
-//    }
-
     /**
-     * Публичный метод для инициализации только хука языка
+     * Система хуков для принудительного русского языка.
+     * 
+     * АКТИВНЫЕ ХУКИ:
+     * 1. Resources.getConfiguration() - основной хук для исправления локали
+     * 2. LocaleList.getDefault() - управление списком локалей  
+     * 3. Configuration.getLocales() - системные списки локалей
      */
-//    public void initRussianLanguageForce() {
-//        initLocaleHook();
-//    }
-
-    /**
-     * Отключает хук принудительного русского языка
-     */
-    public void disableRussianLanguageForce() {
+    public void initLocaleHook() {
         try {
-            if (localeUnhook != null) {
-                localeUnhook.unhook();
-                localeUnhook = null;
-                Log.i(TAG, "Хук принудительного русского языка отключен");
+            Log.i(TAG, "Инициализация хуков для принудительного русского языка...");
+
+            // Хук 1: Resources.getConfiguration() - основной хук для исправления локали
+            try {
+                configurationUnhook = Pine.hook(android.content.res.Resources.class.getDeclaredMethod("getConfiguration"), new MethodHook() {
+                    @Override
+                    public void afterCall(Pine.CallFrame callFrame) throws Throwable {
+                        try {
+                            android.content.res.Configuration config = (android.content.res.Configuration) callFrame.getResult();
+                            if (config != null) {
+                                // Логируем исходное значение перед изменением
+                                String originalLocaleStr = config.locale != null ? config.locale.toString() : "null";
+                                
+                                java.util.Locale russianLocale = new java.util.Locale(_forceRussianLanguage, _forceRussianCountry);
+                                config.locale = russianLocale;
+                                
+                                // Для Android 7.0+ также устанавливаем LocaleList
+                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                                    try {
+                                        android.os.LocaleList russianLocaleList = new android.os.LocaleList(russianLocale);
+                                        config.setLocales(russianLocaleList);
+                                    } catch (Exception localeListException) {
+                                        Log.w(TAG, "Ошибка при установке LocaleList: " + localeListException.getMessage());
+                                    }
+                                }
+                                
+                                // Ограничиваем частоту логирования для этого часто вызываемого метода
+                                long currentTime = System.currentTimeMillis();
+                                if (currentTime - lastResourcesConfigLogTime > LOG_INTERVAL_MS) {
+                                    Log.d(TAG, "Resources.getConfiguration() [БЫЛО: " + originalLocaleStr + "] → ru_RU");
+                                    lastResourcesConfigLogTime = currentTime;
+                                }
+                            }
+                        } catch (Throwable th) {
+                            Log.d(TAG, "Ошибка в хуке Resources.getConfiguration(): " + th.getMessage());
+                        }
+                    }
+                });
+            } catch (Exception e) {
+                Log.e(TAG, "Ошибка при установке хука на Resources.getConfiguration(): " + e.getMessage());
             }
+
+            // Хук 2: LocaleList.getDefault() - управление списком локалей (Android 7.0+)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                try {
+                    localeListUnhook = Pine.hook(android.os.LocaleList.class.getDeclaredMethod("getDefault"), new MethodHook() {
+                        @Override
+                        public void afterCall(Pine.CallFrame callFrame) throws Throwable {
+                            try {
+                                // Логируем исходное значение перед изменением
+                                android.os.LocaleList originalLocaleList = (android.os.LocaleList) callFrame.getResult();
+                                String originalStr = originalLocaleList != null ? originalLocaleList.toString() : "null";
+                                
+                                java.util.Locale russianLocale = new java.util.Locale(_forceRussianLanguage, _forceRussianCountry);
+                                android.os.LocaleList russianLocaleList = new android.os.LocaleList(russianLocale);
+                                callFrame.setResult(russianLocaleList);
+                                
+                                // Ограничиваем частоту логирования для этого часто вызываемого метода
+                                long currentTime = System.currentTimeMillis();
+                                if (currentTime - lastLocaleListLogTime > LOG_INTERVAL_MS) {
+                                    Log.d(TAG, "LocaleList.getDefault() [БЫЛО: " + originalStr + "] → [ru_RU]");
+                                    lastLocaleListLogTime = currentTime;
+                                }
+                            } catch (Throwable th) {
+                                Log.d(TAG, "Ошибка в хуке LocaleList.getDefault(): " + th.getMessage());
+                            }
+                        }
+                    });
+                } catch (Exception e) {
+                    Log.w(TAG, "Не удалось установить хук на LocaleList.getDefault(): " + e.getMessage());
+                }
+            }
+
+            // Хук 3: Configuration.getLocales() - системные списки локалей (Android 7.0+)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                try {
+                    Pine.hook(android.content.res.Configuration.class.getDeclaredMethod("getLocales"), new MethodHook() {
+                        @Override
+                        public void afterCall(Pine.CallFrame callFrame) throws Throwable {
+                            try {
+                                // Логируем исходное значение перед изменением
+                                android.os.LocaleList originalLocaleList = (android.os.LocaleList) callFrame.getResult();
+                                String originalStr = originalLocaleList != null ? originalLocaleList.toString() : "null";
+                                
+                                java.util.Locale russianLocale = new java.util.Locale(_forceRussianLanguage, _forceRussianCountry);
+                                android.os.LocaleList russianLocaleList = new android.os.LocaleList(russianLocale);
+                                callFrame.setResult(russianLocaleList);
+                                
+                                // Ограничиваем частоту логирования для этого часто вызываемого метода
+                                long currentTime = System.currentTimeMillis();
+                                if (currentTime - lastConfigurationLocalesLogTime > LOG_INTERVAL_MS) {
+                                    Log.d(TAG, "Configuration.getLocales() [БЫЛО: " + originalStr + "] → [ru_RU]");
+                                    lastConfigurationLocalesLogTime = currentTime;
+                                }
+                            } catch (Throwable th) {
+                                Log.d(TAG, "Ошибка в хуке Configuration.getLocales(): " + th.getMessage());
+                            }
+                        }
+                    });
+                } catch (Exception e) {
+                    Log.w(TAG, "Не удалось установить хук на Configuration.getLocales(): " + e.getMessage());
+                }
+            }
+
+            Log.i(TAG, "Хуки для принудительного русского языка успешно установлены (3 активных хука)");
         } catch (Exception e) {
-            Log.e(TAG, "Ошибка при отключении хука языка: " + e.getMessage());
+            Log.e(TAG, "Ошибка при инициализации хуков языка: " + e.getMessage());
         }
     }
+
 
     public void initAppLoadHook()
     {
