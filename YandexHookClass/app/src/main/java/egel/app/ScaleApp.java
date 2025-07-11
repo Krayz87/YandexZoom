@@ -18,7 +18,7 @@ import top.canyie.pine.callback.MethodHook;
 public class ScaleApp extends BroadcastReceiver {
 
     public Context appContext;
-    private static ScaleApp _zoom;
+    private static ScaleApp scaleApp;
     private float Display_Scale = 1.0f;
     private float Resources_Scale = 1.0f;
     private static final String TAG = "ScaleApp";
@@ -56,11 +56,11 @@ public class ScaleApp extends BroadcastReceiver {
 
     public static ScaleApp Instance()
     {
-        if(_zoom == null)
+        if(scaleApp == null)
         {
-            _zoom = new ScaleApp();
+            scaleApp = new ScaleApp();
         }
-        return _zoom;
+        return scaleApp;
     }
 
     private ScaleApp()
@@ -78,53 +78,129 @@ public class ScaleApp extends BroadcastReceiver {
         try {
             Log.i(TAG, "Инициализация системного масштабирования...");
 
-            displayUnhook = Pine.hook(Display.class.getDeclaredMethod("getMetrics", DisplayMetrics.class), new MethodHook() { // from class: com.zeekr.CarWizardComponentFactory.1
-                @Override // top.canyie.pine.callback.MethodHook
-                public void afterCall(Pine.CallFrame callFrame) throws Throwable {
-                    try {
-                        DisplayMetrics displayMetrics = (DisplayMetrics) callFrame.args[0];
-                        if (displayMetrics != null) {
-                            float f = displayMetrics.scaledDensity / displayMetrics.density;
-                            displayMetrics.density *= Display_Scale;
-                            displayMetrics.scaledDensity = displayMetrics.density * f;
-                            displayMetrics.densityDpi = (int) (displayMetrics.densityDpi * Display_Scale);
-                            Log.d(TAG,"Метрики дисплея масштабированы: density=" + displayMetrics.density + ", scaledDensity=" + displayMetrics.scaledDensity + ", densityDpi=" + displayMetrics.densityDpi);
-                        }
-                    } catch (Throwable th) {
-                        Log.d(TAG,"Ошибка в хуке getMetrics: " + th.getMessage());
+            // ИСПРАВЛЕННЫЙ хук Display.getMetrics() с защитой от конфликтов типов
+            try {
+                displayUnhook = Pine.hook(Display.class.getDeclaredMethod("getMetrics", DisplayMetrics.class), new MethodHook() {
+                    @Override
+                    public void beforeCall(Pine.CallFrame callFrame) throws Throwable {
+
                     }
-                }
-            });
+                    
+                    @Override
+                    public void afterCall(Pine.CallFrame callFrame) throws Throwable {
+                        try {
+                            // Применяем масштабирование только если коэффициент != 1.0
+                            if (Math.abs(Display_Scale - 1.0f) <= 0.01f) {
+                                return; // Масштабирование не нужно
+                            }
+                            
+                            Object thisObject = callFrame.thisObject;
+                            Object[] args = callFrame.args;
+                            
+                            // Повторная проверка безопасности
+                            if (thisObject == null || args == null || args.length == 0 || args[0] == null) {
+                                return;
+                            }
+                            
+                            // Проверяем классы строго по имени
+                            if (!thisObject.getClass().getName().equals("android.view.Display")) {
+                                return;
+                            }
+                            
+                            if (!args[0].getClass().getName().equals("android.util.DisplayMetrics")) {
+                                return;
+                            }
+                            
+                            // Только теперь безопасно кастим
+                            DisplayMetrics displayMetrics = (DisplayMetrics) args[0];
+                            
+                            // Сохраняем оригинальные значения для расчета
+                            float originalDensity = displayMetrics.density;
+                            float originalScaledDensity = displayMetrics.scaledDensity;
+                            
+                            // Применяем масштабирование
+                            float scaledDensityRatio = originalScaledDensity / originalDensity;
+                            displayMetrics.density *= Display_Scale;
+                            displayMetrics.scaledDensity = displayMetrics.density * scaledDensityRatio;
+                            displayMetrics.densityDpi = (int) (displayMetrics.densityDpi * Display_Scale);
+                            
+                            Log.d(TAG, "✅ Display масштабирован: density=" + displayMetrics.density + 
+                                     ", scaledDensity=" + displayMetrics.scaledDensity + 
+                                     ", densityDpi=" + displayMetrics.densityDpi + 
+                                     ", коэффициент=" + Display_Scale);
+                                     
+                        } catch (ClassCastException e) {
+                            Log.e(TAG, "ClassCastException в Display.getMetrics(): " + e.getMessage());
+                        } catch (Exception e) {
+                            Log.e(TAG, "Ошибка в afterCall Display.getMetrics(): " + e.getMessage());
+                        }
+                    }
+                });
+                
+                Log.i(TAG, "✅ Хук на Display.getMetrics установлен с защитой от конфликтов типов");
+                
+            } catch (NoSuchMethodException e) {
+                Log.e(TAG, "Метод Display.getMetrics(DisplayMetrics) не найден: " + e.getMessage());
+            } catch (Exception e) {
+                Log.e(TAG, "Ошибка при установке хука Display.getMetrics(): " + e.getMessage());
+            }
 
-            Log.d(TAG, "Хук на Display.getMetrics установлен");
-
-            // Хук для Resources.getDisplayMetrics()
+            // Хук для Resources.getDisplayMetrics() - ИСПРАВЛЕН
             try {
                 resourcesUnhook = Pine.hook(Resources.class.getDeclaredMethod("getDisplayMetrics"), new MethodHook() {
                     @Override
                     public void afterCall(Pine.CallFrame callFrame) throws Throwable {
-                        DisplayMetrics metrics = (DisplayMetrics) callFrame.getResult();
-                        if (metrics != null) {
-                            // Сохраняем оригинальные значения только при первом вызове и больше никогда их не меняем
-                            if (originalDensityDpi == -1) {
-                                originalDensityDpi = metrics.densityDpi;
-                                originalDensity = metrics.density;
-                                originalScaledDensity = metrics.scaledDensity;
-                                Log.d(TAG, "Сохранены оригинальные значения DPI: " + originalDensityDpi);
-                            }
+                        try {
+                            Object result = callFrame.getResult();
+                            
+                            // Проверяем тип результата перед кастингом
+                            if (result instanceof DisplayMetrics) {
+                                DisplayMetrics metrics = (DisplayMetrics) result;
+                                
+                                // Сохраняем оригинальные значения только при первом вызове
+                                if (originalDensityDpi == -1) {
+                                    originalDensityDpi = metrics.densityDpi;
+                                    originalDensity = metrics.density;
+                                    originalScaledDensity = metrics.scaledDensity;
+                                    Log.d(TAG, "Сохранены оригинальные значения DPI: " + originalDensityDpi);
+                                }
 
-                            // Всегда пересчитываем масштабированные значения на основе оригинальных
-                            int newScaledDensityDpi = (int) (originalDensityDpi * Resources_Scale);
-                            float newDensity = originalDensity * Resources_Scale;
-                            float newScaledDensity = originalScaledDensity * Resources_Scale;
+                                // Применяем масштабирование только если коэффициент != 1.0
+                                if (Math.abs(Resources_Scale - 1.0f) > 0.01f) {
+                                    int newScaledDensityDpi = (int) (originalDensityDpi * Resources_Scale);
+                                    float newDensity = originalDensity * Resources_Scale;
+                                    float newScaledDensity = originalScaledDensity * Resources_Scale;
 
-                            // Применяем масштабирование только если значения изменились
-                            if (Math.abs(metrics.densityDpi - newScaledDensityDpi) > 1) {
-                                metrics.density = newDensity;
-                                metrics.scaledDensity = newScaledDensity;
-                                metrics.densityDpi = newScaledDensityDpi;
-                                Log.d(TAG, "Применено масштабирование DPI: " + metrics.densityDpi + " (коэффициент: " + Resources_Scale + ")");
+                                    // Применяем масштабирование только если значения изменились
+                                    if (Math.abs(metrics.densityDpi - newScaledDensityDpi) > 1) {
+                                        metrics.density = newDensity;
+                                        metrics.scaledDensity = newScaledDensity;
+                                        metrics.densityDpi = newScaledDensityDpi;
+                                        Log.d(TAG, "Применено масштабирование DPI: " + metrics.densityDpi + " (коэффициент: " + Resources_Scale + ")");
+                                    }
+                                }
+                            } else {
+                                // Детальная диагностика неожиданного типа
+                                if (result != null) {
+                                    Class<?> resultClass = result.getClass();
+                                    Log.w(TAG, "Resources.getDisplayMetrics() вернул неожиданный тип:");
+                                    Log.w(TAG, "  Класс: " + resultClass.getName());
+                                    Log.w(TAG, "  Простое имя: " + resultClass.getSimpleName());
+                                    Log.w(TAG, "  Пакет: " + (resultClass.getPackage() != null ? resultClass.getPackage().getName() : "null"));
+                                    Log.w(TAG, "  Суперкласс: " + (resultClass.getSuperclass() != null ? resultClass.getSuperclass().getName() : "null"));
+                                    Log.w(TAG, "  Интерфейсы: " + java.util.Arrays.toString(resultClass.getInterfaces()));
+                                    Log.w(TAG, "  toString(): " + result.toString());
+                                    
+                                    // Проверяем, можно ли попытаться извлечь DisplayMetrics
+                                    if (result.toString().contains("DisplayMetrics")) {
+                                        Log.w(TAG, "  Объект содержит DisplayMetrics, возможно это wrapper");
+                                    }
+                                } else {
+                                    Log.w(TAG, "Resources.getDisplayMetrics() вернул null");
+                                }
                             }
+                        } catch (Exception e) {
+                            Log.e(TAG, "Ошибка в хуке Resources.getDisplayMetrics(): " + e.getMessage());
                         }
                     }
                 });
@@ -155,14 +231,18 @@ public class ScaleApp extends BroadcastReceiver {
         try {
             Log.i(TAG, "Инициализация хуков для принудительного русского языка...");
 
-            // Хук 1: Resources.getConfiguration() - основной хук для исправления локали
+            // Хук 1: Resources.getConfiguration() - основной хук для исправления локали - ИСПРАВЛЕН
             try {
                 configurationUnhook = Pine.hook(android.content.res.Resources.class.getDeclaredMethod("getConfiguration"), new MethodHook() {
                     @Override
                     public void afterCall(Pine.CallFrame callFrame) throws Throwable {
                         try {
-                            android.content.res.Configuration config = (android.content.res.Configuration) callFrame.getResult();
-                            if (config != null) {
+                            Object result = callFrame.getResult();
+                            
+                            // Проверяем тип результата перед кастингом
+                            if (result instanceof android.content.res.Configuration) {
+                                android.content.res.Configuration config = (android.content.res.Configuration) result;
+                                
                                 // Логируем исходное значение перед изменением
                                 String originalLocaleStr = config.locale != null ? config.locale.toString() : "null";
                                 
@@ -185,9 +265,11 @@ public class ScaleApp extends BroadcastReceiver {
                                     Log.d(TAG, "Resources.getConfiguration() [БЫЛО: " + originalLocaleStr + "] → ru_RU");
                                     lastResourcesConfigLogTime = currentTime;
                                 }
+                            } else {
+                                Log.w(TAG, "Resources.getConfiguration() вернул неожиданный тип: " + (result != null ? result.getClass().getSimpleName() : "null"));
                             }
                         } catch (Throwable th) {
-                            Log.d(TAG, "Ошибка в хуке Resources.getConfiguration(): " + th.getMessage());
+                            Log.e(TAG, "Ошибка в хуке Resources.getConfiguration(): " + th.getMessage(), th);
                         }
                     }
                 });
@@ -202,22 +284,28 @@ public class ScaleApp extends BroadcastReceiver {
                         @Override
                         public void afterCall(Pine.CallFrame callFrame) throws Throwable {
                             try {
-                                // Логируем исходное значение перед изменением
-                                android.os.LocaleList originalLocaleList = (android.os.LocaleList) callFrame.getResult();
-                                String originalStr = originalLocaleList != null ? originalLocaleList.toString() : "null";
+                                Object result = callFrame.getResult();
                                 
-                                java.util.Locale russianLocale = new java.util.Locale(_forceRussianLanguage, _forceRussianCountry);
-                                android.os.LocaleList russianLocaleList = new android.os.LocaleList(russianLocale);
-                                callFrame.setResult(russianLocaleList);
-                                
-                                // Ограничиваем частоту логирования для этого часто вызываемого метода
-                                long currentTime = System.currentTimeMillis();
-                                if (currentTime - lastLocaleListLogTime > LOG_INTERVAL_MS) {
-                                    Log.d(TAG, "LocaleList.getDefault() [БЫЛО: " + originalStr + "] → [ru_RU]");
-                                    lastLocaleListLogTime = currentTime;
+                                // Проверяем тип результата перед кастингом
+                                if (result instanceof android.os.LocaleList) {
+                                    android.os.LocaleList originalLocaleList = (android.os.LocaleList) result;
+                                    String originalStr = originalLocaleList.toString();
+                                    
+                                    java.util.Locale russianLocale = new java.util.Locale(_forceRussianLanguage, _forceRussianCountry);
+                                    android.os.LocaleList russianLocaleList = new android.os.LocaleList(russianLocale);
+                                    callFrame.setResult(russianLocaleList);
+                                    
+                                    // Ограничиваем частоту логирования для этого часто вызываемого метода
+                                    long currentTime = System.currentTimeMillis();
+                                    if (currentTime - lastLocaleListLogTime > LOG_INTERVAL_MS) {
+                                        Log.d(TAG, "LocaleList.getDefault() [БЫЛО: " + originalStr + "] → [ru_RU]");
+                                        lastLocaleListLogTime = currentTime;
+                                    }
+                                } else {
+                                    Log.w(TAG, "LocaleList.getDefault() вернул неожиданный тип: " + (result != null ? result.getClass().getSimpleName() : "null"));
                                 }
                             } catch (Throwable th) {
-                                Log.d(TAG, "Ошибка в хуке LocaleList.getDefault(): " + th.getMessage());
+                                Log.e(TAG, "Ошибка в хуке LocaleList.getDefault(): " + th.getMessage(), th);
                             }
                         }
                     });
@@ -233,22 +321,28 @@ public class ScaleApp extends BroadcastReceiver {
                         @Override
                         public void afterCall(Pine.CallFrame callFrame) throws Throwable {
                             try {
-                                // Логируем исходное значение перед изменением
-                                android.os.LocaleList originalLocaleList = (android.os.LocaleList) callFrame.getResult();
-                                String originalStr = originalLocaleList != null ? originalLocaleList.toString() : "null";
+                                Object result = callFrame.getResult();
                                 
-                                java.util.Locale russianLocale = new java.util.Locale(_forceRussianLanguage, _forceRussianCountry);
-                                android.os.LocaleList russianLocaleList = new android.os.LocaleList(russianLocale);
-                                callFrame.setResult(russianLocaleList);
-                                
-                                // Ограничиваем частоту логирования для этого часто вызываемого метода
-                                long currentTime = System.currentTimeMillis();
-                                if (currentTime - lastConfigurationLocalesLogTime > LOG_INTERVAL_MS) {
-                                    Log.d(TAG, "Configuration.getLocales() [БЫЛО: " + originalStr + "] → [ru_RU]");
-                                    lastConfigurationLocalesLogTime = currentTime;
+                                // Проверяем тип результата перед кастингом
+                                if (result instanceof android.os.LocaleList) {
+                                    android.os.LocaleList originalLocaleList = (android.os.LocaleList) result;
+                                    String originalStr = originalLocaleList.toString();
+                                    
+                                    java.util.Locale russianLocale = new java.util.Locale(_forceRussianLanguage, _forceRussianCountry);
+                                    android.os.LocaleList russianLocaleList = new android.os.LocaleList(russianLocale);
+                                    callFrame.setResult(russianLocaleList);
+                                    
+                                    // Ограничиваем частоту логирования для этого часто вызываемого метода
+                                    long currentTime = System.currentTimeMillis();
+                                    if (currentTime - lastConfigurationLocalesLogTime > LOG_INTERVAL_MS) {
+                                        Log.d(TAG, "Configuration.getLocales() [БЫЛО: " + originalStr + "] → [ru_RU]");
+                                        lastConfigurationLocalesLogTime = currentTime;
+                                    }
+                                } else {
+                                    Log.w(TAG, "Configuration.getLocales() вернул неожиданный тип: " + (result != null ? result.getClass().getSimpleName() : "null"));
                                 }
                             } catch (Throwable th) {
-                                Log.d(TAG, "Ошибка в хуке Configuration.getLocales(): " + th.getMessage());
+                                Log.e(TAG, "Ошибка в хуке Configuration.getLocales(): " + th.getMessage(), th);
                             }
                         }
                     });

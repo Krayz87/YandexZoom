@@ -42,4 +42,7 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
+    compileOnly("com.yandex.android:maps.mobile:4.14.0-navikit")
+    compileOnly("com.yandex.mapkit.styling:roadevents:4.14.0")
+    compileOnly("com.yandex.mapkit.styling:automotivenavigation:4.14.0")
 }

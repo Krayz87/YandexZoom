@@ -29,7 +29,7 @@ public class ManeuverView {
     private static final String EXTRA_UNIT = "unit";
 
     private static ManeuverView _instance;
-    private Context appContext;
+    //private Context appContext;
     private boolean initialized = false;
 
     // Хуки для отключения
@@ -54,9 +54,9 @@ public class ManeuverView {
         // Pine уже инициализирован в ScaleApp
     }
 
-    public void setAppContext(Context context) {
-        this.appContext = context;
-    }
+//    public void setAppContext(Context context) {
+//        this.appContext = context;
+//    }
 
     public void initHooks() {
         if (initialized) {
@@ -358,11 +358,4 @@ public class ManeuverView {
             Log.e(TAG, "Ошибка при отключении хуков: " + e.getMessage(), e);
         }
     }
-
-    // Геттеры для получения текущего состояния
-    public String getCurrentDistance() { return currentDistance; }
-    public String getCurrentUnit() { return currentUnit; }
-    public String getCurrentRoadName() { return currentRoadName; }
-    public String getCurrentImageId() { return currentImageId; }
-    public boolean isCurrentlyVisible() { return isCurrentlyVisible; }
 }
