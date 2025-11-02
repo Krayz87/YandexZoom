@@ -21,4 +21,9 @@ public class MainActivity extends AppCompatActivity {
             return insets;
         });
     }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+    }
 }

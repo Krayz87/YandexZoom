@@ -198,7 +198,7 @@ public class HudPresentation extends Presentation {
                 "        }" +
                 "    }" +
                 "]";
-        mapView.getMapWindow().getMap().setMapStyle(style);
+        //mapView.getMapWindow().getMap().setMapStyle(style);
         mapView.getMapWindow().getMap().setNightModeEnabled(true);
         mapView.getMapWindow().getMap().set2DMode(false);
 //        Logo logo = mapView.getMapWindow().getMap().getLogo();

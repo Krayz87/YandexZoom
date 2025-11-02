@@ -123,30 +123,29 @@ public class ZoomHook extends BroadcastReceiver {
                 Log.e(TAG, "Ошибка при установке хука на getDisplayMetrics: " + e.getMessage());
             }
 
-            // Хук для NavigationBinding.startGuidance
+            // Хук для MapActivity.onStart
             try {
-                Class<?> navigationBindingClass = Class.forName("com.yandex.mapkit.navigation.automotive.internal.NavigationBinding");
-                Method initializeMethod = navigationBindingClass.getDeclaredMethod("startGuidance", Context.class);
+                Class<?> mapActivityClass = Class.forName("ru.yandex.yandexmaps.app.MapActivity");
+                Method onStartMethod = mapActivityClass.getDeclaredMethod("onStart");
                 
-                mapKitUnhook = Pine.hook(initializeMethod, new MethodHook() {
+                mapKitUnhook = Pine.hook(onStartMethod, new MethodHook() {
                     @Override
                     public void beforeCall(Pine.CallFrame callFrame) throws Throwable {
-                        Log.d(TAG, "Перехват NavigationBinding.startGuidance перед вызовом");
-                        // Если нужно изменить контекст или другие параметры перед вызовом
-                        // callFrame.args[0] = модифицированный контекст;
+                        Log.d(TAG, "Перехват MapActivity.onStart перед вызовом");
                     }
 
                     @Override
                     public void afterCall(Pine.CallFrame callFrame) throws Throwable {
-
                         createView(appContext);
-
-                        Log.d(TAG, "NavigationBinding.startGuidance успешно выполнен");
+                        Log.d(TAG, "MapActivity.onStart успешно выполнен");
                     }
                 });
-                Log.d(TAG, "Хук на NavigationBinding.startGuidance установлен");
+                Log.d(TAG, "Хук на MapActivity.onStart установлен");
+            } catch (ClassNotFoundException e) {
+                Log.e(TAG, "Класс MapActivity не найден: " + e.getMessage());
             } catch (Exception e) {
-                Log.e(TAG, "Ошибка при установке хука на NavigationBinding.startGuidance: " + e.getMessage());
+                Log.e(TAG, "Ошибка при установке хука на MapActivity.onStart: " + e.getMessage());
+                e.printStackTrace();
             }
 
             initialized = true;
